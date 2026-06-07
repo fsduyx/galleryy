@@ -1,118 +1,278 @@
-// script.js — полный рабочий вариант с выбором обликов и localStorage
+// script.js — полный рабочий вариант с созданием аватарок
 let currentPosition = 0;
 let totalCardsCount = cardsData.length;
 let selectedCardId = null;
 let currentSelectedCardData = null;
 
-// --- Работа с localStorage и выбором изображений ---
-const STORAGE_KEY = 'clash_custom_images';
+// ========== ДОБАВЛЕНИЕ: Пользовательские аватарки ==========
+let userAvatars = [];
+let avatarCanvas = null;
+let avatarCtx = null;
+let isDrawing = false;
 
-function loadCustomImages() {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) return;
-    try {
-        const selections = JSON.parse(saved);
-        for (let card of cardsData) {
-            if (selections[card.id] && card.fullImageOptions.includes(selections[card.id])) {
-                card.image = selections[card.id];
-                card.heroImage = selections[card.id];
-            }
-        }
-    } catch(e) { console.warn("Ошибка загрузки сохранений", e); }
+// Загрузка аватарок из localStorage
+function loadUserAvatars() {
+    const saved = localStorage.getItem('clash_user_avatars');
+    if (saved) {
+        try {
+            userAvatars = JSON.parse(saved);
+            renderUserAvatarsSection();
+        } catch(e) { console.error('Ошибка загрузки аватарок:', e); }
+    }
 }
 
-function saveImageSelection(cardId, imageUrl) {
-    const card = cardsData.find(c => c.id === cardId);
-    if (!card || !card.fullImageOptions.includes(imageUrl)) {
-        console.warn("Некорректный выбор изображения");
-        return false;
-    }
-    card.image = imageUrl;
-    card.heroImage = imageUrl;
-    let selections = {};
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) selections = JSON.parse(saved);
-    selections[cardId] = imageUrl;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(selections));
-    
-    if (window.cardImageCache) {
-        if (!window.cardImageCache[imageUrl]) {
-            const img = new Image();
-            img.src = imageUrl;
-            window.cardImageCache[imageUrl] = img;
-        }
-    }
-    if (currentSelectedCardData?.id === cardId || cardsData[currentPosition]?.id === cardId) {
-        refreshGallery();
-    }
-    showNotification(`Облик ${card.name} изменён!`, false);
-    return true;
+// Сохранение аватарок
+function saveUserAvatars() {
+    localStorage.setItem('clash_user_avatars', JSON.stringify(userAvatars));
 }
 
-function openImageSelector(card) {
-    const modal = document.getElementById('imageSelectorModal');
-    const container = document.getElementById('imageOptionsContainer');
-    const cardNameSpan = document.getElementById('modalCardName');
-    if (!modal || !container) return;
+// Отображение секции с аватарками в галерее
+function renderUserAvatarsSection() {
+    // Ищем или создаём контейнер для аватарок
+    let container = document.getElementById('userAvatarsSection');
+    const galleryWrapper = document.querySelector('.gallery-wrapper');
     
-    cardNameSpan.textContent = card.name;
-    container.innerHTML = '';
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'userAvatarsSection';
+        container.className = 'gallery-section';
+        
+        // Вставляем после bottom-nav
+        const bottomNav = document.querySelector('.bottom-nav');
+        if (bottomNav) {
+            bottomNav.insertAdjacentElement('afterend', container);
+        } else {
+            galleryWrapper.appendChild(container);
+        }
+    }
     
-    const options = card.fullImageOptions || [card.image];
-    options.forEach((imgUrl, idx) => {
-        const optionDiv = document.createElement('div');
-        optionDiv.className = 'image-option';
-        if (imgUrl === card.image) optionDiv.classList.add('selected');
+    if (userAvatars.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    container.innerHTML = `
+        <h3 class="gallery-title"><i class="fas fa-user-astronaut"></i> Мои аватарки (${userAvatars.length})</h3>
+        <div class="user-avatars-container" id="userAvatarsContainer"></div>
+    `;
+    
+    const avatarsContainer = document.getElementById('userAvatarsContainer');
+    
+    userAvatars.forEach((avatar, index) => {
+        const avatarCard = document.createElement('div');
+        avatarCard.className = 'user-avatar-card';
+        avatarCard.innerHTML = `
+            <div class="user-avatar-badge">🎨 Моя аватарка</div>
+            <img src="${avatar.data}" class="user-avatar-img" alt="Аватар ${index + 1}">
+            <div class="user-avatar-name">Аватар ${index + 1}</div>
+            <button class="delete-avatar-btn" data-id="${avatar.id}">🗑️ Удалить</button>
+        `;
+        avatarsContainer.appendChild(avatarCard);
         
-        const img = document.createElement('img');
-        img.src = imgUrl;
-        img.alt = `Вариант ${idx+1}`;
-        img.onerror = () => { img.src = DEFAULT_CARD_IMG; };
-        
-        optionDiv.appendChild(img);
-        optionDiv.addEventListener('click', () => {
-            if (options.includes(imgUrl)) {
-                saveImageSelection(card.id, imgUrl);
-                modal.classList.add('hidden');
-            } else {
-                showNotification("Ошибка: недопустимый вариант", false);
-            }
+        const deleteBtn = avatarCard.querySelector('.delete-avatar-btn');
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteUserAvatar(avatar.id);
         });
-        container.appendChild(optionDiv);
     });
+}
+
+// Удаление аватарки
+function deleteUserAvatar(id) {
+    if (confirm('Удалить этот аватар из коллекции?')) {
+        userAvatars = userAvatars.filter(a => a.id !== id);
+        saveUserAvatars();
+        renderUserAvatarsSection();
+        showAvatarNotification('Аватар удалён', 'error');
+    }
+}
+
+// Инициализация canvas для рисования
+function initAvatarCanvas() {
+    avatarCanvas = document.getElementById('avatarCanvas');
+    if (!avatarCanvas) return;
     
-    modal.classList.remove('hidden');
+    avatarCtx = avatarCanvas.getContext('2d');
+    avatarCanvas.width = 300;
+    avatarCanvas.height = 300;
+    
+    // Белый фон
+    avatarCtx.fillStyle = '#ffffff';
+    avatarCtx.fillRect(0, 0, 300, 300);
+    
+    // Рисуем рамку и подсказку
+    avatarCtx.strokeStyle = '#cccccc';
+    avatarCtx.lineWidth = 2;
+    avatarCtx.strokeRect(10, 10, 280, 280);
+    
+    avatarCtx.fillStyle = '#999999';
+    avatarCtx.font = '14px Arial';
+    avatarCtx.textAlign = 'center';
+    avatarCtx.fillText('Нарисуй свой аватар!', 150, 150);
+    
+    avatarCtx.strokeStyle = '#ff4444';
+    avatarCtx.lineWidth = 3;
+    avatarCtx.lineCap = 'round';
+    
+    // Обработчики рисования
+    const startDraw = (e) => {
+        isDrawing = true;
+        const pos = getCanvasPos(e);
+        avatarCtx.beginPath();
+        avatarCtx.moveTo(pos.x, pos.y);
+        e.preventDefault();
+    };
+    
+    const draw = (e) => {
+        if (!isDrawing) return;
+        const pos = getCanvasPos(e);
+        avatarCtx.lineTo(pos.x, pos.y);
+        avatarCtx.stroke();
+        avatarCtx.beginPath();
+        avatarCtx.moveTo(pos.x, pos.y);
+        e.preventDefault();
+    };
+    
+    const stopDraw = () => {
+        isDrawing = false;
+        avatarCtx.beginPath();
+    };
+    
+    const getCanvasPos = (e) => {
+        const rect = avatarCanvas.getBoundingClientRect();
+        const scaleX = avatarCanvas.width / rect.width;
+        const scaleY = avatarCanvas.height / rect.height;
+        
+        let clientX, clientY;
+        if (e.touches) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+        
+        return {
+            x: (clientX - rect.left) * scaleX,
+            y: (clientY - rect.top) * scaleY
+        };
+    };
+    
+    avatarCanvas.addEventListener('mousedown', startDraw);
+    avatarCanvas.addEventListener('mousemove', draw);
+    avatarCanvas.addEventListener('mouseup', stopDraw);
+    avatarCanvas.addEventListener('mouseleave', stopDraw);
+    avatarCanvas.addEventListener('touchstart', startDraw);
+    avatarCanvas.addEventListener('touchmove', draw);
+    avatarCanvas.addEventListener('touchend', stopDraw);
+    
+    // Настройки инструментов
+    const brushColor = document.getElementById('brushColor');
+    const brushSize = document.getElementById('brushSize');
+    const sizeValue = document.getElementById('sizeValue');
+    
+    if (brushColor) {
+        brushColor.addEventListener('input', () => {
+            avatarCtx.strokeStyle = brushColor.value;
+        });
+    }
+    
+    if (brushSize) {
+        brushSize.addEventListener('input', () => {
+            const val = parseInt(brushSize.value);
+            avatarCtx.lineWidth = val;
+            if (sizeValue) sizeValue.textContent = val + 'px';
+        });
+    }
+    
+    const clearBtn = document.getElementById('clearCanvasBtn');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            avatarCtx.fillStyle = '#ffffff';
+            avatarCtx.fillRect(0, 0, 300, 300);
+            avatarCtx.strokeStyle = '#cccccc';
+            avatarCtx.lineWidth = 2;
+            avatarCtx.strokeRect(10, 10, 280, 280);
+            avatarCtx.strokeStyle = brushColor?.value || '#ff4444';
+            avatarCtx.lineWidth = parseInt(brushSize?.value || 3);
+            avatarCtx.fillStyle = '#999999';
+            avatarCtx.font = '14px Arial';
+            avatarCtx.textAlign = 'center';
+            avatarCtx.fillText('Нарисуй свой аватар!', 150, 150);
+        });
+    }
 }
 
-function addChangeSkinButton() {
-    const infoPanel = document.querySelector('.info-panel');
-    if (!infoPanel || document.getElementById('changeSkinBtn')) return;
-    const btn = document.createElement('button');
-    btn.id = 'changeSkinBtn';
-    btn.className = 'change-skin-btn';
-    btn.innerHTML = '🎨 Сменить облик';
-    btn.style.marginTop = '12px';
-    btn.style.width = '100%';
-    btn.addEventListener('click', () => {
-        const currentCard = cardsData[currentPosition];
-        if (currentCard) openImageSelector(currentCard);
-    });
-    infoPanel.appendChild(btn);
+// Открыть модалку рисования
+function openAvatarModal() {
+    const modal = document.getElementById('avatarModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        
+        // Очищаем canvas для нового рисунка
+        if (avatarCtx) {
+            avatarCtx.fillStyle = '#ffffff';
+            avatarCtx.fillRect(0, 0, 300, 300);
+            avatarCtx.strokeStyle = '#cccccc';
+            avatarCtx.lineWidth = 2;
+            avatarCtx.strokeRect(10, 10, 280, 280);
+            avatarCtx.fillStyle = '#999999';
+            avatarCtx.font = '14px Arial';
+            avatarCtx.textAlign = 'center';
+            avatarCtx.fillText('Нарисуй свой аватар!', 150, 150);
+            avatarCtx.strokeStyle = document.getElementById('brushColor')?.value || '#ff4444';
+            avatarCtx.lineWidth = parseInt(document.getElementById('brushSize')?.value || 3);
+        }
+    }
 }
 
-function initModalCloser() {
-    const modal = document.getElementById('imageSelectorModal');
-    if (!modal) return;
-    const closeSpan = modal.querySelector('.modal-close');
-    closeSpan?.addEventListener('click', () => modal.classList.add('hidden'));
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) modal.classList.add('hidden');
-    });
+// Закрыть модалку
+function closeAvatarModal() {
+    const modal = document.getElementById('avatarModal');
+    if (modal) modal.classList.add('hidden');
 }
+
+// Сохранить аватарку в галерею
+function saveAvatarToGallery() {
+    if (!avatarCanvas) return;
+    
+    const imageData = avatarCanvas.toDataURL();
+    const newAvatar = {
+        id: Date.now(),
+        data: imageData,
+        timestamp: Date.now()
+    };
+    
+    userAvatars.unshift(newAvatar);
+    saveUserAvatars();
+    renderUserAvatarsSection();
+    closeAvatarModal();
+    showAvatarNotification('Аватар добавлен в галерею!', 'success');
+}
+
+// Уведомление для аватарок
+function showAvatarNotification(message, type) {
+    const toast = document.createElement('div');
+    toast.className = 'position-fixed bottom-0 end-0 p-3';
+    toast.style.zIndex = '2000';
+    toast.innerHTML = `
+        <div class="toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0 show" role="alert">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+// ========== ОРИГИНАЛЬНЫЙ КОД script.js (без изменений) ==========
 
 document.addEventListener('DOMContentLoaded', () => {
-    loadCustomImages(); // загружаем сохранённые облики
-    
     const mainCard = document.getElementById('mainCard');
     const leftArrow = document.getElementById('leftArrow');
     const rightArrow = document.getElementById('rightArrow');
@@ -314,7 +474,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     buildDots();
     refreshGallery();
-    addChangeSkinButton();
-    initModalCloser();
-    console.log('✅ SELECT и START работают, выбор обликов добавлен');
+    console.log('✅ SELECT и START работают');
 });
+
+// ========== ИНИЦИАЛИЗАЦИЯ АВАТАРОК ==========
+setTimeout(() => {
+    initAvatarCanvas();
+    loadUserAvatars();
+    
+    const createBtn = document.getElementById('createAvatarBtn');
+    const closeModalBtn = document.getElementById('closeAvatarModal');
+    const cancelBtn = document.getElementById('cancelAvatarBtn');
+    const saveBtn = document.getElementById('saveAvatarBtn');
+    const modal = document.getElementById('avatarModal');
+    
+    if (createBtn) createBtn.addEventListener('click', openAvatarModal);
+    if (closeModalBtn) closeModalBtn.addEventListener('click', closeAvatarModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeAvatarModal);
+    if (saveBtn) saveBtn.addEventListener('click', saveAvatarToGallery);
+    
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeAvatarModal();
+        });
+    }
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+            closeAvatarModal();
+        }
+    });
+}, 100);
