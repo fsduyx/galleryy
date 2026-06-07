@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Clash Royale — Дуэль с Боссом</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="gallery-wrapper" id="galleryWrapper">
+        <div class="gallery-container">
+            <div class="side-arrow left-arrow" id="leftArrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+                <div class="arrow-tooltip">Назад</div>
+            </div>
+            <div class="card-center" id="cardCenter">
+                <div class="particles-background" id="particlesBackground"></div>
+                <div class="glow-background" id="glowBackground"></div>
+                <div class="card-wrapper">
+                    <img class="gallery-card" id="mainCard" src="images/card1.webp" alt="Карточка">
+                    <div class="card-shine"></div>
+                    <div class="card-border-glow"></div>
+                    <button class="action-btn select-btn" id="selectBtn">⚔️ SELECT</button>
+                    <button class="action-btn start-btn hidden" id="startBtn">🏆 START BATTLE</button>
+                </div>
+                <div class="selected-badge hidden" id="selectedBadge">✓ ВЫБРАНО</div>
+            </div>
+            <div class="side-arrow right-arrow" id="rightArrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+                <div class="arrow-tooltip">Вперёд</div>
+            </div>
+        </div>
+        <div class="info-panel">
+            <div class="info-header">
+                <div class="info-rarity" id="cardRarity"><span class="rarity-dot"></span><span class="rarity-text">⚡
+                        Эпическая</span></div>
+                <div class="info-elixir" id="cardElixir"><span class="elixir-icon">💧</span><span
+                        class="elixir-value">7</span></div>
+            </div>
+            <div class="info-name" id="cardName">П.Е.К.К.А.</div>
+            <div class="info-description" id="cardDescription">Медленный воин ближнего боя в тяжёлой броне.</div>
+            <div class="stats-grid">
+                <div class="stat-card"><span class="stat-label">❤️ Здоровье</span><span class="stat-value" id="cardHp">4
+                        982</span></div>
+                <div class="stat-card"><span class="stat-label">⚔️ Урон</span><span class="stat-value" id="cardDmg">1
+                        081</span></div>
+                <div class="stat-card"><span class="stat-label">⏱️ Скорость атаки</span><span class="stat-value"
+                        id="cardSpeed">1.8 сек</span></div>
+                <div class="stat-card"><span class="stat-label">🎯 Цель</span><span class="stat-value"
+                        id="cardTarget">Наземные</span></div>
+                <div class="stat-card"><span class="stat-label">🏃 Скорость</span><span class="stat-value"
+                        id="cardMove">Медленная</span></div>
+                <div class="stat-card"><span class="stat-label">🛡️ Редкость</span><span class="stat-value"
+                        id="cardRarityValue">Эпическая</span></div>
+            </div>
+        </div>
+        <div class="bottom-nav">
+            <div class="bottom-dots" id="bottomDots"></div>
+            <div class="card-counter" id="cardCounter">01 / 08</div>
+        </div>
+    </div>
+
+    <div class="game-container hidden" id="gameContainer">
+        <canvas id="gameCanvas" width="1000" height="600"></canvas>
+        <button class="back-to-gallery" id="backToGallery">← Вернуться к картам</button>
+        <div class="battle-stats" id="battleStats">
+            <div class="player-health-bar"><span>❤️ ГЕРОЙ</span>
+                <div class="health-fill" id="playerHealthFill"></div><span id="playerHealthText">100</span>
+            </div>
+            <div class="enemy-health-bar"><span>👑 БОСС</span>
+                <div class="health-fill enemy-fill" id="enemyHealthFill"></div><span id="enemyHealthText">800</span>
+            </div>
+            <div class="victory-message hidden" id="victoryMessage"></div>
+        </div>
+        <div class="game-over-buttons hidden" id="gameOverButtons">
+            <button class="game-over-btn" id="playAgainBtn">🔄 Сыграть снова</button>
+            <button class="game-over-btn exit-btn" id="exitToGalleryBtn">🚪 Выйти</button>
+        </div>
+    </div>
+
+    <div class="toast-notification" id="toastNotification"><span class="toast-icon">✨</span><span
+            class="toast-text">Карта выбрана!</span></div>
+    <div class="start-toast" id="startToast"><span class="toast-icon">🏆</span><span class="toast-text">БИТВА
+            НАЧАЛАСЬ!</span></div>
+
+    <!-- Модальное окно выбора изображения -->
+    <div id="imageSelectorModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h3>Выберите облик для <span id="modalCardName"></span></h3>
+            <div id="imageOptionsContainer" class="image-options"></div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+    <script src="game.js"></script>
+</body>
+
+</html>
